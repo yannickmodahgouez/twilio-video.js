@@ -9,17 +9,21 @@ const source = require('vinyl-source-stream');
 const stream = require('stream');
 const vfs = require('vinyl-fs');
 
-const entryPoint = pkg.main;
+// const entryPoint = pkg.main;
+const entryPoint = './lib/indexES6';
+
+// "node ./scripts/build.js ./src/twilio-video.js ./LICENSE.md ./dist/twilio-video.js",
 const template = process.argv[2];
 const license = process.argv[3];
 const dest = process.argv[4];
-
 const bundler = browserify({
-  entries: entryPoint
+  entries: entryPoint,
+  // debug: true
 });
 
 var entryPointId = null;
 bundler.on('dep', dep => {
+  console.log('makarand dep:', dep.file);
   entryPointId = dep.entry ? dep.id : entryPointId;
 });
 
@@ -28,6 +32,7 @@ return Promise.all([
   readableStreamToPromise(fs.createReadStream(license)),
   readableStreamToPromise(bundler.bundle())
 ]).then(results => {
+  console.log('makarand: got results');
   if (entryPointId === null) {
     throw new Error('Entry point ID not found!');
   }
