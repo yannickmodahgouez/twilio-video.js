@@ -5,6 +5,10 @@
 # and run any job locally with:
 # circleci local execute -c config_processed.yml --job "firefox stable group"
 version: 2.1
+
+orbs:
+  win: circleci/windows@2.2.0 # The Windows orb give you everything you need to start using the Windows executor.
+
 parameters:
   environment:
     type: enum
@@ -230,6 +234,20 @@ jobs:
     environment:
       BROWSER: << parameters.browser >>
       BVER: << parameters.bver >>
+  WindowsJob:
+    executor:
+      name: win/default
+    steps:
+      # default shell is Powershell
+      - run:
+         command: $(echo hello | Out-Host; $?) -and $(echo world | Out-Host; $?)
+         shell: powershell.exe
+      - run:
+         command: echo hello && echo world
+         shell: bash.exe
+      - run:
+         command: echo hello & echo world
+         shell: cmd.exe
 
 workflows:
   version: 2
@@ -268,12 +286,7 @@ workflows:
           <<: *bver_beta
   Custom_Workflow:
     when: << pipeline.parameters.custom_workflow >>
-    jobs:
-      - run-integration-tests:
-          name: << pipeline.parameters.environment >> << pipeline.parameters.browser >> << pipeline.parameters.bver >>  << pipeline.parameters.topology >>
-          browser: << pipeline.parameters.browser >>
-          bver: << pipeline.parameters.bver >>
-          topology: << pipeline.parameters.topology >>
+    jobs: [WindowsJob]
   Backend_Workflow:
     when: << pipeline.parameters.backend_workflow >>
     jobs:
