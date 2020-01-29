@@ -95,6 +95,27 @@ describe('connect', function() {
     });
   });
 
+  describe('can create a room', () => {
+    let room = null;
+    before(async () => {
+      const identity = randomName();
+      const token = getToken(identity, Object.assign({}, defaults));
+      room = await waitFor(connect(token, Object.assign({}, defaults, { logLevel: 'off', tracks: [] })));
+    });
+
+    after(() => {
+      if (room) {
+        room.disconnect();
+        room = null;
+      }
+    });
+
+    it('can create room : ' + room.sid, () => {
+      // eslint-disable-next-line no-console
+      console.log('room.sid:', room.sid);
+    });
+  });
+
   // eslint-disable-next-line require-await
   describe('called with an invalid LogLevel', async () => {
     const logLevel = 'foo';
@@ -141,7 +162,7 @@ describe('connect', function() {
           });
         });
 
-        it(`should ${shouldSubscribe ? '' : 'not '}subscribe to the RemoteTracks in the Room`, async () => {
+        it(`should ${shouldSubscribe ? '' : 'not '}subscribe to the RemoteTracks in the Room: ${sid}`, async () => {
           const participants = [...thisRoom.participants.values()];
           await waitFor(participants.map(participant => tracksPublished(participant, 2)), 'tracksPublished');
 
@@ -490,7 +511,7 @@ describe('connect', function() {
       return completeRoom(sid);
     });
 
-    it('should return a CancelablePromise that resolves to a Room', () => {
+    it(`should return a CancelablePromise that resolves to a Room: ${sid}`, () => {
       assert(cancelablePromise instanceof CancelablePromise);
       assert(room instanceof Room);
     });
