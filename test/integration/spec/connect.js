@@ -97,20 +97,22 @@ describe('connect', function() {
 
   describe('can create a room', () => {
     let room = null;
-    before(async () => {
+    beforeEach(async () => {
       const identity = randomName();
       const token = getToken(identity, Object.assign({}, defaults));
       room = await waitFor(connect(token, Object.assign({}, defaults, { logLevel: 'off', tracks: [] })));
+      // eslint-disable-next-line no-console
+      console.log('room.sid');
     });
 
-    after(() => {
+    afterEach(() => {
       if (room) {
         room.disconnect();
         room = null;
       }
     });
 
-    it('can create room : ' + room.sid, () => {
+    it('can create room ', () => {
       // eslint-disable-next-line no-console
       console.log('room.sid:', room.sid);
     });
