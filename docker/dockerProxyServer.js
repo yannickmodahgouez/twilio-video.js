@@ -2,7 +2,7 @@
 'use strict';
 
 const DEFAULT_SERVER_PORT = 3032;
-const DEFAULT_UDP_PORTS = '10000:20000';
+const DEFAULT_UDP_PORTS = '10000:60000';
 const cors = require('cors');
 const fetchRequest = require('./fetchRequest');
 const isDocker = require('is-docker')();
@@ -79,23 +79,32 @@ class DockerProxyServer {
     });
   }
 
-  _ipTables(target, protocol, ports) {
-    const command = `sudo iptables -I INPUT 1 -p ${protocol} --sports ${ports} -j ${target}`
-      + `&& sudo iptables -I OUTPUT 1 -p ${protocol} --dports ${ports} -j ${target}`;
+  _ipTables(modifier, target, protocol, ports) {
+    const chainCommand = (chain, type, port) => {
+      return `sudo iptables -${modifier} ${chain} ${modifier === 'I' ? '1 ' : ''}`
+        + `-p ${protocol} --${type}-port ${port} -j ${target}`;
+    };
+    const inputChainCommands = ports.map(port => chainCommand('INPUT', 'source', port));
+    const outputChainCommands = ports.map(port => chainCommand('OUTPUT', 'destination', port));
+    const command = inputChainCommands.concat(outputChainCommands).join(' && ');
     console.log(command);
-    return this._runCommand(command);
+    return this._runCommand(command).then(() => {
+      return this._runCommand('sudo iptables -L --line-numbers');
+    }).then(result => {
+      console.log(result);
+    });
   }
 
   _blockUdpTraffic({ ports }) {
-    return this._ipTables('DROP', 'udp', ports === 'all'
-      ? DEFAULT_UDP_PORTS
-      : ports);
+    return this._ipTables('I', 'DROP', 'udp', ports === 'all'
+      ? [DEFAULT_UDP_PORTS]
+      : ports.split(','));
   }
 
   _unblockUdpTraffic({ ports }) {
-    return this._ipTables('ACCEPT', 'udp', ports === 'all'
-      ? DEFAULT_UDP_PORTS
-      : ports);
+    return this._ipTables('D', 'DROP', 'udp', ports === 'all'
+      ? [DEFAULT_UDP_PORTS]
+      : ports.split(','));
   }
 
   // resets network to default state

@@ -13,11 +13,13 @@ const {
   waitToGoOffline,
   waitToGoOnline,
   smallVideoConstraints,
-  waitFor
+  waitFor,
+  waitOnceForRoomEvent
 } = require('../../../lib/util');
 
 const DockerProxyClient = require('../../../../docker/dockerProxyClient');
 const { connect, createLocalTracks } = require('../../../../lib');
+const { flatMap } = require('../../../../lib/util');
 
 const {
   MediaConnectionError,
@@ -30,7 +32,7 @@ const RECONNECTING_TIMEOUT = 5 * ONE_MINUTE;
 const RECONNECTED_TIMEOUT = 5 * ONE_MINUTE;
 const DISCONNECTED_TIMEOUT = 10 * ONE_MINUTE;
 
-// resolves when room received n track started events.
+// Resolves when room received n track started events.
 function waitForTracksToStart(room, n) {
   return new Promise(resolve => {
     room.on('trackStarted', function trackStarted() {
@@ -40,6 +42,18 @@ function waitForTracksToStart(room, n) {
       }
     });
   });
+}
+
+// Get nominated local RTCIceCandidate stats.
+function getLocalIceCandidateStats(room) {
+  const peerConnections = Array.from(room._signaling._peerConnectionManager._peerConnections.values()).map(pcv2 => pcv2._peerConnection);
+  return Promise.all(peerConnections.map(async pc => {
+    const stats = await pc.getStats();
+    const activeIceCandidatePairStats = Array.from(stats.values()).find(stat => {
+      return stat.type === 'candidate-pair' && stat.nominated;
+    });
+    return stats.get(activeIceCandidatePairStats.localCandidateId);
+  }));
 }
 
 /**
@@ -131,6 +145,7 @@ describe('Reconnection states and events', function() {
 
   let dockerAPI = new DockerProxyClient();
   let isRunningInsideDocker = false;
+
   before(async () => {
     isRunningInsideDocker = await dockerAPI.isDocker();
     console.log('isRunningInsideDocker = ', isRunningInsideDocker);
@@ -143,21 +158,53 @@ describe('Reconnection states and events', function() {
     assert.equal(typeof isRunningInsideDocker, 'boolean');
   });
 
-  it('can detect media flow', async () => {
-    const rooms =  await setup(2);
-    await waitFor(rooms.map(validateMediaFlow), 'validate media flow', VALIDATE_MEDIA_FLOW_TIMEOUT);
-    rooms.forEach(room => room.disconnect());
-    return completeRoom(rooms[0].sid);
-  });
+  context.only('should be able to', () => {
+    let rooms;
 
-  it.only('can block and unblock media flow', async () => {
-    const rooms =  await setup(2);
-    await waitFor(rooms.map(validateMediaFlow), 'validate media flow', VALIDATE_MEDIA_FLOW_TIMEOUT);
-    await dockerAPI.blockUdpTraffic();
-    await waitFor(rooms.map(room => new Promise(resolve => room.once('reconnecting', resolve))));
-    await dockerAPI.unblockUdpTraffic();
-    await waitFor(rooms.map(room => new Promise(resolve => room.once('reconnected', resolve))));
-    return completeRoom(rooms[0].sid);
+    before(async function() {
+      if (!isRunningInsideDocker) {
+        // eslint-disable-next-line no-invalid-this
+        this.skip();
+      } else {
+        rooms = await setup(3);
+      }
+    });
+
+    after(async () => {
+      if (rooms) {
+        rooms.forEach(room => room.disconnect());
+        await completeRoom(rooms[0].sid);
+        rooms = null;
+      }
+    });
+
+    it('validate media flow', () => {
+      return waitFor(rooms.map(validateMediaFlow), 'validate media flow', VALIDATE_MEDIA_FLOW_TIMEOUT);
+    });
+
+    it('block all media ports', async () => {
+      const reconnectingPromises = rooms.map(room => waitOnceForRoomEvent(room, 'reconnecting'));
+      const reconnectedPromises = rooms.map(room => waitOnceForRoomEvent(room, 'reconnected'));
+
+      await dockerAPI.blockUdpTraffic();
+      await waitFor(reconnectingPromises, 'reconnectingPromises', RECONNECTING_TIMEOUT);
+
+      await dockerAPI.unblockUdpTraffic();
+      return waitFor(reconnectedPromises, 'reconnectedPromises', RECONNECTED_TIMEOUT);
+    });
+
+    it('block specific media ports', async () => {
+      const localCandidateStats = await Promise.all(rooms.map(getLocalIceCandidateStats));
+      const portsToBlock = flatMap(localCandidateStats.slice(1), stats => stats.map(stat => stat.port));
+
+      const blockedRooms = rooms.slice(1);
+      const reconnectingPromises = blockedRooms.map(room => waitOnceForRoomEvent(room, 'reconnecting'));
+      const reconnectedPromises = blockedRooms.map(room => waitOnceForRoomEvent(room, 'reconnected'));
+
+      await dockerAPI.blockUdpTraffic(portsToBlock);
+      await waitFor(reconnectingPromises.concat(reconnectedPromises), 'reconnectionPromises', RECONNECTING_TIMEOUT + RECONNECTED_TIMEOUT);
+      return dockerAPI.unblockUdpTraffic(portsToBlock);
+    });
   });
 
   [1, 2].forEach(nPeople => {

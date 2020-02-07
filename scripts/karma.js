@@ -52,7 +52,7 @@ async function main() {
     }
   }
 
-  const files = filterTests(getTestPaths(dockerProxy ? dockerIntegrationTests : integrationTests));
+  const files = filterTests(getTestPaths(dockerProxy ? dockerIntegrationTests : integrationTests)).filter(path => /reconnection/.test(path));
 
   let processExitCode = 0;
   for (const file of files) {
