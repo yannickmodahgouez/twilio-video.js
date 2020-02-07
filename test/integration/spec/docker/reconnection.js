@@ -150,6 +150,16 @@ describe('Reconnection states and events', function() {
     return completeRoom(rooms[0].sid);
   });
 
+  it.only('can block and unblock media flow', async () => {
+    const rooms =  await setup(2);
+    await waitFor(rooms.map(validateMediaFlow), 'validate media flow', VALIDATE_MEDIA_FLOW_TIMEOUT);
+    await dockerAPI.blockUdpTraffic();
+    await waitFor(rooms.map(room => new Promise(resolve => room.once('reconnecting', resolve))));
+    await dockerAPI.unblockUdpTraffic();
+    await waitFor(rooms.map(room => new Promise(resolve => room.once('reconnected', resolve))));
+    return completeRoom(rooms[0].sid);
+  });
+
   [1, 2].forEach(nPeople => {
     describe(`${nPeople} Participant(s)`, () => {
       let rooms = [];

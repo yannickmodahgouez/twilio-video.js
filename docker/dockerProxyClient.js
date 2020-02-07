@@ -32,6 +32,30 @@ class DockerProxyClient {
   }
 
   /**
+   * Block UDP traffic for the given ports. If no ports specified, then
+   * block all UDP traffic.
+   * @param {Array<number>} [ports]
+   * @returns {Promise<void>}
+   */
+  blockUdpTraffic(ports) {
+    return this._makeRequest(`blockUdpTraffic/${Array.isArray(ports)
+      ? encodeURIComponent(ports.join(','))
+      : 'all'}`);
+  }
+
+  /**
+   * Unblock UDP traffic for the given ports. If no ports specified, then
+   * unblock all UDP traffic.
+   * @param {Array<number>} [ports]
+   * @returns {Promise<void>}
+   */
+  unblockUdpTraffic(ports) {
+    return this._makeRequest(`unblockUdpTraffic/${Array.isArray(ports)
+      ? encodeURIComponent(ports.join(','))
+      : 'all'}`);
+  }
+
+  /**
    * @returns {Promise<{containerId: string}>} - Resolves to object containing containerId.
    */
   getCurrentContainerId() {
