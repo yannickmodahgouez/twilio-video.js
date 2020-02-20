@@ -59,6 +59,7 @@ var AudioContextFactory = function () {
   _createClass(AudioContextFactory, [{
     key: 'getOrCreate',
     value: function getOrCreate(holder) {
+      holder = window
       if (!this._holders.has(holder)) {
         this._holders.add(holder);
         if (this._AudioContext && !this._audioContext) {
